@@ -1,0 +1,3 @@
+# you can use regex here.
+enabled-worlds:
+  - resource.*
