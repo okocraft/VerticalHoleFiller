@@ -39,9 +39,15 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 		HandlerList.unregisterAll((Listener) this);
 	}
 
-	@EventHandler
+	@EventHandler(ignoreCancelled = true)
 	public void onBlockBreak(BlockBreakEvent event) {
 		if (!isEnabledWorld(event.getBlock().getWorld())) {
+			return;
+		}
+
+		
+		BlockState mappedState = mapStateType(event.getBlock().getState()); 
+		if (mappedState == null) {
 			return;
 		}
 
@@ -74,7 +80,8 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 			return;
 		}
 
-		playersBrokenBlocks.add(mapStateType(event.getBlock().getState()));
+		playersBrokenBlocks.add(mappedState);
+
 		if (playersBrokenBlocks.size() > 8) {
 			playersBrokenBlocks.get(0).update(true, true);
 			playersBrokenBlocks.remove(0);
@@ -100,8 +107,7 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 			state.setType(Material.SANDSTONE);
 			break;
 		default:
-			state.setType(Material.STONE);
-			break;
+			return null;
 		}
 
 		return state;
