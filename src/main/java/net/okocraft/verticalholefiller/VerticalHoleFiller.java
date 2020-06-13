@@ -100,6 +100,7 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 		switch (state.getType()) {
 		case GRASS_BLOCK:
 		case DIRT:
+		case STONE:
 		case ANDESITE:
 		case DIORITE:
 		case GRANITE:
