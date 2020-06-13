@@ -10,7 +10,6 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.BlockState;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
@@ -21,16 +20,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class VerticalHoleFiller extends JavaPlugin implements Listener {
 
-	private FileConfiguration config;
-
     private final Map<Player, List<BlockState>> brokenBlocks = new HashMap<>();
-    private final Map<Player, Integer> timesNotPass = new HashMap<>();
 
 	@Override
 	public void onEnable() {
 		saveDefaultConfig();
-		config = getConfig();
-
 		Bukkit.getPluginManager().registerEvents(this, this);
 	}
 
@@ -113,6 +107,8 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 		return state;
 	}
 
+    private final Map<Player, Integer> timesNotPass = new HashMap<>();
+
 	private void notPass(Player player) {
 		timesNotPass.put(player, timesNotPass.getOrDefault(player, 0) + 1);
 		if (timesNotPass.get(player) >= 2) {
@@ -129,7 +125,7 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 	}
 
 	private boolean isEnabledWorld(World world) {
-		for (String pattern : config.getStringList("enabled-worlds")) {
+		for (String pattern : getConfig().getStringList("enabled-worlds")) {
 			if (world.getName().matches(pattern)) {
 				return true;
 			}
