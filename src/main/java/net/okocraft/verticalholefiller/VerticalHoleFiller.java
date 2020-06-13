@@ -40,7 +40,7 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 			return;
 		}
 
-		// 掘ったブロックが
+		// 掘ったブロックが地面の構成ブロックじゃなかったら、穴埋めしない。
 		BlockState mappedState = mapStateType(event.getBlock().getState()); 
 		if (mappedState == null) {
 			return;
