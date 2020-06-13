@@ -16,6 +16,7 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class VerticalHoleFiller extends JavaPlugin implements Listener {
@@ -39,20 +40,20 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 			return;
 		}
 
-		
+		// 掘ったブロックが
 		BlockState mappedState = mapStateType(event.getBlock().getState()); 
 		if (mappedState == null) {
 			return;
 		}
 
 		Player player = event.getPlayer();
-
 		List<BlockState> playersBrokenBlocks = brokenBlocks.get(player);
 		if (playersBrokenBlocks == null) {
 			playersBrokenBlocks = new ArrayList<>();
 			brokenBlocks.put(player, playersBrokenBlocks);
 		}
 
+		// 遠かったり、別ワールドなら履歴を削除する。
 		if (playersBrokenBlocks.size() > 0) {
 			Location prevLocation = playersBrokenBlocks.get(0).getLocation();
 			Location blockLocation = event.getBlock().getLocation();
@@ -62,12 +63,13 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 			}
 		}
 
+		// ブロックのほうがプレイヤーより高い場合は穴埋めしない。
 		if (event.getBlock().getY() > player.getLocation().getY()) {
 			notPass(player);
 			return;
 		}
 
-		// ブロックの端っこを見たときのピッチ
+		// 下を向いていなかったら穴埋めしない。
 		double pitchCondition = 90 - (180 / Math.PI) * Math.atan(0.7 * Math.sqrt(2) / player.getEyeHeight());
 		if (player.getLocation().getPitch() < pitchCondition) {
 			notPass(player);
@@ -88,6 +90,12 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 		timesNotPass.remove(event.getPlayer());
 	}
 
+	/**
+	 * 受け取った{@code state}を適切なタイプに変換する。
+	 * 
+	 * @param state 変換するBlockState
+	 * @return 掘ったブロックが地面の構成ブロックだったらそのままの{@code state}を返す。<br>砂だったら砂岩にタイプを置換した{@code state}を返す。<br>それら以外の場合はnullを返す。
+	 */
 	private BlockState mapStateType(BlockState state) {
 		switch (state.getType()) {
 		case GRASS_BLOCK:
@@ -109,6 +117,11 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 
     private final Map<Player, Integer> timesNotPass = new HashMap<>();
 
+	/**
+	 * 何回も直下掘り以外の掘り方をしたら履歴を削除する。
+	 * 
+	 * @param player
+	 */
 	private void notPass(Player player) {
 		timesNotPass.put(player, timesNotPass.getOrDefault(player, 0) + 1);
 		if (timesNotPass.get(player) >= 2) {
@@ -117,6 +130,11 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 		}
 	}
 
+	/**
+	 * 履歴を削除する。
+	 * 
+	 * @param player
+	 */
 	private void clearHistory(Player player) {
 		List<BlockState> playersBrokenBlocks = brokenBlocks.get(player);
 		if (playersBrokenBlocks != null) {
@@ -124,6 +142,12 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 		}
 	}
 
+	/**
+	 * ワールド名が設定にあるかどうか調べる。設定のワールド名リストが正規表現なのでこの実装に。
+	 * 
+	 * @param world
+	 * @return
+	 */
 	private boolean isEnabledWorld(World world) {
 		for (String pattern : getConfig().getStringList("enabled-worlds")) {
 			if (world.getName().matches(pattern)) {
