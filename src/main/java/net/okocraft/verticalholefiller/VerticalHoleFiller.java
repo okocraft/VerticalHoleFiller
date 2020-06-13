@@ -31,7 +31,7 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 
 	@Override
 	public void onDisable() {
-		HandlerList.unregisterAll((Listener) this);
+		HandlerList.unregisterAll((Plugin) this);
 	}
 
 	@EventHandler(ignoreCancelled = true)
