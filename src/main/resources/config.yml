@@ -1,3 +1,10 @@
 # you can use regex here.
 enabled-worlds:
   - resource.*
+  - main.*
+
+# WorldGuard
+ignore-inside-claimed-region: true
+
+# When the player teleport outside within 10 block from hole, fill the hole player made.
+fill-all-when-tp: true

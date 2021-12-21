@@ -5,6 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldguard.WorldGuard;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -16,6 +19,7 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -23,139 +27,168 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
 
     private final Map<Player, List<BlockState>> brokenBlocks = new HashMap<>();
 
-	@Override
-	public void onEnable() {
-		saveDefaultConfig();
-		Bukkit.getPluginManager().registerEvents(this, this);
-	}
+    @Override
+    public void onEnable() {
+        saveDefaultConfig();
+        Bukkit.getPluginManager().registerEvents(this, this);
+    }
 
-	@Override
-	public void onDisable() {
-		HandlerList.unregisterAll((Plugin) this);
-	}
+    @Override
+    public void onDisable() {
+        HandlerList.unregisterAll((Plugin) this);
+    }
 
-	@EventHandler(ignoreCancelled = true)
-	public void onBlockBreak(BlockBreakEvent event) {
-		if (!isEnabledWorld(event.getBlock().getWorld())) {
-			return;
-		}
+    @EventHandler(ignoreCancelled = true)
+    public void onBlockBreak(BlockBreakEvent event) {
+        if (!isEnabledWorld(event.getBlock().getWorld())) {
+            return;
+        }
 
-		// 掘ったブロックが地面の構成ブロックじゃなかったら、穴埋めしない。
-		BlockState mappedState = mapStateType(event.getBlock().getState()); 
-		if (mappedState == null) {
-			return;
-		}
+        if (getConfig().getBoolean("ignore-inside-claimed-region")) {
+            if (WorldGuard.getInstance().getPlatform().getRegionContainer()
+                    .get(BukkitAdapter.adapt(event.getBlock().getWorld()))
+                    .getApplicableRegions(
+                            BukkitAdapter.adapt(event.getBlock().getLocation()).toVector().toBlockPoint()
+                    ).size() != 0) {
+                return;
+            }
+        }
 
-		Player player = event.getPlayer();
-		List<BlockState> playersBrokenBlocks = brokenBlocks.get(player);
-		if (playersBrokenBlocks == null) {
-			playersBrokenBlocks = new ArrayList<>();
-			brokenBlocks.put(player, playersBrokenBlocks);
-		}
+        // 掘ったブロックが地面の構成ブロックじゃなかったら、穴埋めしない。
+        BlockState mappedState = mapStateType(event.getBlock().getState()); 
+        if (mappedState == null) {
+            return;
+        }
 
-		// 遠かったり、別ワールドなら履歴を削除する。
-		if (playersBrokenBlocks.size() > 0) {
-			Location prevLocation = playersBrokenBlocks.get(0).getLocation();
-			Location blockLocation = event.getBlock().getLocation();
-			if (!prevLocation.getWorld().equals(blockLocation.getWorld())
-					|| prevLocation.distance(blockLocation) > 10) {
-				clearHistory(player);
-			}
-		}
+        Player player = event.getPlayer();
+        List<BlockState> playersBrokenBlocks = brokenBlocks.get(player);
+        if (playersBrokenBlocks == null) {
+            playersBrokenBlocks = new ArrayList<>();
+            brokenBlocks.put(player, playersBrokenBlocks);
+        }
 
-		// ブロックのほうがプレイヤーより高い場合は穴埋めしない。
-		if (event.getBlock().getY() > player.getLocation().getY()) {
-			notPass(player);
-			return;
-		}
+        // 遠かったり、別ワールドなら履歴を削除する。
+        if (playersBrokenBlocks.size() > 0) {
+            Location prevLocation = playersBrokenBlocks.get(0).getLocation();
+            Location blockLocation = event.getBlock().getLocation();
+            if (!prevLocation.getWorld().equals(blockLocation.getWorld())
+                    || prevLocation.distanceSquared(blockLocation) > 100) {
+                clearHistory(player);
+            }
+        }
 
-		// 下を向いていなかったら穴埋めしない。
-		double pitchCondition = 90 - (180 / Math.PI) * Math.atan(0.7 * Math.sqrt(2) / player.getEyeHeight());
-		if (player.getLocation().getPitch() < pitchCondition) {
-			notPass(player);
-			return;
-		}
+        // ブロックのほうがプレイヤーより高い場合は穴埋めしない。
+        if (event.getBlock().getY() > player.getLocation().getY()) {
+            notPass(player);
+            return;
+        }
 
-		playersBrokenBlocks.add(mappedState);
+        // 下を向いていなかったら穴埋めしない。
+        double pitchCondition = 90 - (180 / Math.PI) * Math.atan(0.7 * Math.sqrt(2) / player.getEyeHeight());
+        if (player.getLocation().getPitch() < pitchCondition) {
+            notPass(player);
+            return;
+        }
 
-		if (playersBrokenBlocks.size() > 8) {
-			playersBrokenBlocks.get(0).update(true, true);
-			playersBrokenBlocks.remove(0);
-		}
-	}
+        playersBrokenBlocks.add(mappedState);
 
-	@EventHandler
-	public void onPlayerQuit(PlayerQuitEvent event) {
-		brokenBlocks.remove(event.getPlayer());
-		timesNotPass.remove(event.getPlayer());
-	}
+        if (playersBrokenBlocks.size() > 8) {
+            playersBrokenBlocks.get(0).update(true, true);
+            playersBrokenBlocks.remove(0);
+        }
+    }
 
-	/**
-	 * 受け取った{@code state}を適切なタイプに変換する。
-	 * 
-	 * @param state 変換するBlockState
-	 * @return 掘ったブロックが地面の構成ブロックだったらそのままの{@code state}を返す。<br>砂だったら砂岩にタイプを置換した{@code state}を返す。<br>それら以外の場合はnullを返す。
-	 */
-	private BlockState mapStateType(BlockState state) {
-		switch (state.getType()) {
-		case GRASS_BLOCK:
-		case DIRT:
-		case STONE:
-		case ANDESITE:
-		case DIORITE:
-		case GRANITE:
-		case SANDSTONE:
-			break;
-		case SAND:
-			state.setType(Material.SANDSTONE);
-			break;
-		default:
-			return null;
-		}
+    @EventHandler
+    public void onTP(PlayerTeleportEvent event) {
+        if (!getConfig().getBoolean("fill-all-when-tp")) {
+            return;
+        }
+        Player player = event.getPlayer();
+        List<BlockState> playersBrokenBlocks = brokenBlocks.get(player);
+        if (playersBrokenBlocks == null || playersBrokenBlocks.isEmpty()) {
+            return;
+        }
+        if (event.getTo().distanceSquared(playersBrokenBlocks.get(playersBrokenBlocks.size() - 1).getLocation()) <= 100) {
+            return;
+        }
 
-		return state;
-	}
+        playersBrokenBlocks.forEach(mapped -> mapped.update(true, true));
+        playersBrokenBlocks.clear();
+        brokenBlocks.remove(player);
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        brokenBlocks.remove(event.getPlayer());
+        timesNotPass.remove(event.getPlayer());
+    }
+
+    /**
+     * 受け取った{@code state}を適切なタイプに変換する。
+     * 
+     * @param state 変換するBlockState
+     * @return 掘ったブロックが地面の構成ブロックだったらそのままの{@code state}を返す。<br>砂だったら砂岩にタイプを置換した{@code state}を返す。<br>それら以外の場合はnullを返す。
+     */
+    private BlockState mapStateType(BlockState state) {
+        switch (state.getType()) {
+        case GRASS_BLOCK:
+        case DIRT:
+        case STONE:
+        case ANDESITE:
+        case DIORITE:
+        case GRANITE:
+        case SANDSTONE:
+            break;
+        case SAND:
+            state.setType(Material.SANDSTONE);
+            break;
+        default:
+            return null;
+        }
+
+        return state;
+    }
 
     private final Map<Player, Integer> timesNotPass = new HashMap<>();
 
-	/**
-	 * 何回も直下掘り以外の掘り方をしたら履歴を削除する。
-	 * 
-	 * @param player
-	 */
-	private void notPass(Player player) {
-		timesNotPass.put(player, timesNotPass.getOrDefault(player, 0) + 1);
-		if (timesNotPass.get(player) >= 2) {
-			timesNotPass.remove(player);
-			clearHistory(player);
-		}
-	}
+    /**
+     * 何回も直下掘り以外の掘り方をしたら履歴を削除する。
+     * 
+     * @param player
+     */
+    private void notPass(Player player) {
+        timesNotPass.put(player, timesNotPass.getOrDefault(player, 0) + 1);
+        if (timesNotPass.get(player) >= 2) {
+            timesNotPass.remove(player);
+            clearHistory(player);
+        }
+    }
 
-	/**
-	 * 履歴を削除する。
-	 * 
-	 * @param player
-	 */
-	private void clearHistory(Player player) {
-		List<BlockState> playersBrokenBlocks = brokenBlocks.get(player);
-		if (playersBrokenBlocks != null) {
-			playersBrokenBlocks.clear();
-		}
-	}
+    /**
+     * 履歴を削除する。
+     * 
+     * @param player
+     */
+    private void clearHistory(Player player) {
+        List<BlockState> playersBrokenBlocks = brokenBlocks.get(player);
+        if (playersBrokenBlocks != null) {
+            playersBrokenBlocks.clear();
+        }
+    }
 
-	/**
-	 * ワールド名が設定にあるかどうか調べる。設定のワールド名リストが正規表現なのでこの実装に。
-	 * 
-	 * @param world
-	 * @return
-	 */
-	private boolean isEnabledWorld(World world) {
-		for (String pattern : getConfig().getStringList("enabled-worlds")) {
-			if (world.getName().matches(pattern)) {
-				return true;
-			}
-		}
+    /**
+     * ワールド名が設定にあるかどうか調べる。設定のワールド名リストが正規表現なのでこの実装に。
+     * 
+     * @param world
+     * @return
+     */
+    private boolean isEnabledWorld(World world) {
+        for (String pattern : getConfig().getStringList("enabled-worlds")) {
+            if (world.getName().matches(pattern)) {
+                return true;
+            }
+        }
 
-		return false;
-	}
+        return false;
+    }
 }

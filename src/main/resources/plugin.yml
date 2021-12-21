@@ -3,3 +3,5 @@ version: ${project.version}
 main: ${project.groupId}.${project.artifactId}
 author: LazyGon
 api-version: '1.14'
+
+depend: [ "WorldGuard" ]
