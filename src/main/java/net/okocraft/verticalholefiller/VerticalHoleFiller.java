@@ -108,7 +108,8 @@ public class VerticalHoleFiller extends JavaPlugin implements Listener {
         if (playersBrokenBlocks == null || playersBrokenBlocks.isEmpty()) {
             return;
         }
-        if (event.getTo().distanceSquared(playersBrokenBlocks.get(playersBrokenBlocks.size() - 1).getLocation()) <= 100) {
+        Location newestLoc = playersBrokenBlocks.get(playersBrokenBlocks.size() - 1).getLocation();
+        if (event.getTo().getWorld().equals(newestLoc.getWorld()) && event.getTo().distanceSquared(newestLoc) <= 100) {
             return;
         }
 
